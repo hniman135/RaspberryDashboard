@@ -1,0 +1,568 @@
+// General XMLHttpRequest(s) TODO: Compatibility check
+class ntwReq {
+  constructor(url, successfct, timeoutfct, type="GET", encode=false, data=null) {
+    if (!navigator.onLine) {
+      $('#overallstate').html('<font class="text-danger"><i class="bi bi-question-circle"></i>&nbsp;You are offline ...</font>');
+    }
+    this.xmlhttp = new XMLHttpRequest();
+    this.xmlhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        successfct(this);
+      }
+    };
+    this.xmlhttp.open(type, url, true);
+    if(encode){
+      this.xmlhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    }
+    this.xmlhttp.timeout = 4 * 1000;
+    this.xmlhttp.ontimeout = timeoutfct;
+    if(type=="POST"){
+      console.log("POSTING...");
+      this.xmlhttp.send(data);
+    }else{
+      this.xmlhttp.send();
+    }
+
+  }
+}
+window.addEventListener("offline", function(e) {
+  console.log("offline");
+}, false);
+window.addEventListener("online", function(e) {
+  console.log("online");
+}, false);
+
+function preload(){
+  // Update of all data
+  updatedb();
+  if(window.location.search == "?live=disabled"){ // TODO: init param does not work
+    console.info("Live Update was disabled through site parameters.");
+    document.getElementById("pctl").innerHTML='<i class="bi bi-play"></i>';
+  }
+  setTimeout(function(){ $(".preload-screen").fadeOut("slow"); }, 100);
+  checkShutdown();
+}
+
+var tselect=1;
+function authorize() {
+  if(!$("#inputPassword2").is(":visible")){
+    pass="alreadyauthorized";
+  }else{
+    pass=document.getElementById('inputPassword2').value;
+  }
+  $("#confbtn").html("Checking...");
+  $("#pwrform input, select").prop("disabled","true");
+  $("#confbtn").prop("disabled","true");
+  var e = document.getElementById("time"+tselect);
+  var time;
+  if( (tselect==1) || (tselect==2) ){
+
+    if(tselect==1){
+      time = parseInt(e.options[e.selectedIndex].value);
+    }else{
+      time = parseInt(e.value);
+    }
+
+    if( (!Number.isInteger(time)) || (time < 1) ){
+      alert("Invalid time input!");
+      return false;
+    }
+  }else if(tselect==3){
+    time = e.value;
+  }
+
+  console.log(time);
+
+  var act=document.querySelector('input[name="pwrOptions"]:checked').value;
+  if (pass.length == 0) {
+    console.log("pass is empty");
+    $("#inputPassword2").addClass("is-invalid");
+    $("#pwrform input, select").prop("disabled","");
+    $("#confbtn").prop("disabled","");
+    $("#confbtn").html("Confirm identity");
+    return;
+  } else {
+    var vReq = new ntwReq("backend/serv.php?p=" + pass+"&a="+act+"&time="+time, function (data) {
+      console.log(data.responseText);
+      if(data.responseText.indexOf("true") > -1){
+        document.getElementById("currentState").innerHTML = "<div class='alert alert-success' role='alert'><i class='bi bi-check2-circle'></i>&nbsp;Authorization completed!</font>";
+        var res=JSON.parse(data.responseText.split("true_")[1]);
+        if( (res.act=="") || (res.date==null) ){
+          $("#confbtn").html("<i class='bi bi-x-circle'></i>&nbsp;Failed");
+          if (confirm(("There was an error with scheduling the shutdown. This error usually goes back to incorrect permissions.\nPlease check that user www-data has necessary rights to perform this action.\nShow help?"))){
+            location.href='https://github.com/hniman135/RaspberryDashboard#enable-shutdown--reboot-optional';
+          }
+        }else{
+          $("#confbtn").html("<i class='bi bi-check2-circle'></i>&nbsp;Saved");
+          outputShutdown(res.date,res.act);
+        }
+        setTimeout(function(){
+          $("#exampleModalCenter").modal("hide");
+          document.getElementById("pwrform").reset();
+          $("#pwrform input, select").prop("disabled","");
+          $("#confbtn").prop("disabled","");
+          $("#inputPassword2").addClass("is-valid");
+          $("#confbtn").html("Confirm identity");
+        },1000);
+      }else if(data.responseText=="wrongCredentials"){
+        $("#pwrform input, select").prop("disabled","");
+        $("#confbtn").prop("disabled","");
+        $("#inputPassword2").addClass("is-invalid");
+        $("#confbtn").html("Confirm identity");
+      }else if(data.responseText.indexOf("false") > -1){
+        alert('There was an error with shutdown: Parameter error. Please report this issue on Github!');
+      }
+    }, function () {
+      alert("Failed to execute requested shutdown action!");
+    });
+  }
+}
+function checkShutdown(callback) {
+  document.getElementById("currentState").innerHTML='<div class="alert alert-info" role="alert"><i class="bi bi-chevron-double-right"></i>&nbsp;Checking for power events...</div>';
+  var vReq = new ntwReq("backend/serv.php?checkShutdown", function (data) {
+    console.log(data.responseText);
+    var res=JSON.parse(data.responseText);
+    if(res.act=="unauthorized"){
+      //alert("You are unauthorized!");
+      shutdownCurrent=false;
+    }else if( (res.act=="") || (res.date==null) ){
+      document.getElementById("sys2").innerHTML="";
+      shutdownCurrent=false;
+    }else{
+      shutdownCurrent=true;
+      outputShutdown(res.date,res.act);
+    }
+    if(callback !== undefined){
+      callback();
+    }else{
+      if(shutdownCurrent){
+        document.getElementById("currentState").innerHTML='<div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-circle"></i>&nbsp;Existing shutdown will be overwritten.&nbsp;<button class="btn btn-sm btn-outline-danger" onclick="cancelShutdown();$(\'#exampleModalCenter\').modal(\'hide\');">Remove</button></div>';
+      }else{
+        document.getElementById("currentState").innerHTML='<div class="alert alert-success" role="alert"><i class="bi bi-check2-circle"></i>&nbsp;Currently there is no other power event planned.</div>';
+      }
+    }
+  }, function () {
+    alert("Failed checking for upcoming shutdown events!");
+  });
+}
+
+function cancelShutdown(force) {
+  if(force == undefined){
+    mdtoast('<i class="bi bi-question-circle"></i>&nbsp;Confirm to cancel', { type: 'warning', interaction: true, actionText: "Confirm", action: function(){ cancelShutdown(true); }, duration: 3000});
+    return;
+  }
+  var vReq = new ntwReq("backend/serv.php?cancelShutdown", function (data) {
+    console.log(data.responseText);
+    if(data.responseText=="unauthorized"){
+      alert("You are unauthorized!");
+    }else{
+      checkShutdown(function(){
+        if(shutdownCurrent){
+          alert('There was an error with shutdown cancel. Please report this issue on Github!');
+        }else{
+          mdtoast('<i class="bi bi-check2-circle"></i>&nbsp;Power event was cancelled!', { type: 'success'});
+        }
+      });
+    }
+  }, function () {
+    alert("Failed to cancel existing shutdown!");
+  });
+}
+
+var dobj={Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday"};
+function outputShutdown(data,act) {
+  if(typeof data !== "number"){ // NOTE: for compatibility reasons
+    data=data.replace("\n","");
+    console.log("Trying to process old info...");
+    var day=data.substring(0,3);
+    var s = data.replace(day,dobj[day]);
+    console.log(s);
+    s=s.split(" ")[0]+", "+s.split(" ")[3]+" "+s.split(" ")[1]+", "+s.split(" ")[6]+" "+s.split(" ")[4];
+    console.log(s);
+    scheduled=Date.parse(s);
+    d = new Date(scheduled);
+  }else{
+    d = new Date(data);
+  }
+
+  var restd = Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  var resth = Math.floor((d.getTime() - Date.now()) / (1000 * 60 * 60)) % 24;
+  var restm = Math.floor((d.getTime() - Date.now()) / (1000 * 60)) % 60;
+  var str="";
+  if(restd>0){
+    str+=restd + " d ";
+  }
+  if(resth > 0){
+    str+=resth + " h ";
+  }
+  if(restm>0){
+    str += restm + " m";
+  }
+  if(str==""){ str="<font class='text-danger'>&lt; 1 min</font>"; }
+  console.log(str);
+  document.getElementById("sys2").innerHTML='<div class="alert alert-warning" role="alert"><button class="btn btn-sm btn-outline-danger" onclick="cancelShutdown()" style="float:right">Cancel</button>Scheduled power event: <kbd>'+act+'</kbd><br>Date: <kbd>'+d.toLocaleString()+'</kbd><br>Remaining time: <kbd>'+str+'</kbd><br></div>';
+}
+
+function shutdown(){
+  clearInterval(updinterval);
+  $('#exampleModalCenter').modal('hide');
+  $('#exampleModalCenter2').modal('show');
+  $('#sys1').html('System is being restarted...');
+  $('#sys2').html('<div class="progress" style="height: 1px;"><div class="progress-bar p2" role="progressbar" style="width: 0%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div></div><br><button type="button" class="btn btn-primary b2" onclick="location.reload()" id="secbutton" disabled>Refresh dashboard</button>');
+
+  i=5;
+  ival=setInterval(function(){
+  //console.log(i);
+    if(i<=100){
+      $('.p1').width(i+'%');
+      $('.p1').html(i+'%');
+      $('.p2').width(i+'%');
+      i=i+5;
+    }else{
+      clearInterval(ival);
+      //console.log("Interval cleared");
+      $(".b2").prop( "disabled", false);
+      $(".b2").css("background-color","green");
+    }
+  }, 3000);
+}
+
+function logout(){
+  var vReq = new ntwReq("backend/serv.php?logout", function (data) {
+    console.log(data.responseText);
+    if(timer==true){
+      clearInterval(updinterval);
+      timer=false;
+      console.log("Timer gestoppt");
+    }
+    document.title = hostname + ' - Waiting for Authentication...';
+    $('#overallstate').html('<font class="text-muted"><i class="bi bi-hourglass-split"></i>&nbsp;Waiting for authentication ...</font>');
+    $("#staticBackdrop").modal("show");
+  }, function () {
+    alert("Logging out failed!");
+  });
+}
+
+// General chart functions and globals
+Chart.defaults.global.legend.display = false;
+
+function addData(chart, label, data) {
+  chart.data.labels.push(label);
+  chart.data.datasets.forEach((dataset) => {
+    dataset.data.push(data);
+  });
+  chart.update();
+}
+
+function removeData(chart) {
+  chart.data.labels.pop();
+  chart.data.datasets.forEach((dataset) => {
+    dataset.data.pop();
+  });
+  chart.update();
+}
+
+function updatedb(){
+  var vReq = new ntwReq("backend/sys_infos.php", function (data) {
+    var result=JSON.parse(data.responseText);
+    $('.py').addClass("progress-bar-striped progress-bar-animated");
+    document.title = hostname + ' - Loading...';
+    console.log("Live : Updating...");
+    $('#overallstate').html('<font class="text-muted"><i class="bi bi-hourglass-split"></i>&nbsp;Updating ...</font>');
+    document.getElementById("sys11").innerHTML="";
+    if(result.auth=="false"){
+      if(timer==true){
+        clearInterval(updinterval);
+        timer=false;
+        console.log("Timer gestoppt");
+      }
+      document.title = hostname + ' - Waiting for Authentication...';
+      $('#overallstate').html('<font class="text-muted"><i class="bi bi-hourglass-split"></i>&nbsp;Waiting for authentication ...</font>');
+      $('#staticBackdrop').modal('show');
+      $("footer").addClass("fixed-bottom");
+      return;
+    }
+    if(!timer) togglep(false);
+    warn=0;
+    var x = document.getElementsByName("lastupdated");
+    var i;
+    for (i = 0; i < x.length; i++) {
+      //if (x[i].type == "checkbox") {
+      //  x[i].checked = true;
+      //}
+      x[i].innerHTML=result.timest;
+      //console.log(x.length);
+    }
+    // Uptime
+    document.getElementById("uptime").innerHTML=result.uptime;
+    // CPU Temperature
+    var tempValcelcius = Math.round(result.cputemp*100)/100;
+    var tempValfahrenheit = Math.round(result.cputemp * 1.8 + 32);
+    document.getElementById("temperature").innerHTML = temp_unit ? tempValfahrenheit + "°F" : tempValcelcius + "°C";
+    radialObj.animate(Math.round(temp_unit ? tempValfahrenheit : tempValcelcius));
+    //console.log(parseInt(result.cputemp));
+    if ( parseInt(result.cputemp) < warn_cpu_temp){
+      document.getElementById("tempstate").innerHTML="<i class='bi bi-thermometer-half'></i>&nbsp;Temperature <font class='text-success'>(OK)</font>";
+    }else{
+      document.getElementById("tempstate").innerHTML="<i class='bi bi-thermometer-half'></i>&nbsp;Temperature <font class='text-warning'>(WARNING)</font>";
+      addWarning("CPU Temperature","thermometer-half");
+      warn++;
+    }
+    // CPU Frequency
+    document.getElementById("frequency").innerHTML=result.cpufreq;
+    // CPU Loads
+    console.log(result.load);
+    document.getElementById("m1").innerHTML = Math.round(result.load[0] * 100) / 100;
+    document.getElementById("m5").innerHTML = Math.round(result.load[1] * 100) / 100;
+    document.getElementById("m15").innerHTML = Math.round(result.load[2] * 100) / 100;
+    removeData(chart);
+    removeData(chart);
+    removeData(chart);
+    addData(chart, "1 min", Math.round(result.load[0] * 100) / 100);
+    addData(chart, "5 min", Math.round(result.load[0] * 100) / 100);
+    addData(chart, "15 min", Math.round(result.load[0] * 100) / 100);
+    if (result.load[0] >= warn_loads_size){
+      document.getElementById("cput").innerHTML="CPU <font class='text-warning'>(WARNING)</font>";
+      addWarning("CPU Loads","cpu");
+      warn++;
+    }else{
+      document.getElementById("cput").innerHTML="CPU <font class='text-success'>(OK)</font>";
+    }
+    // RAM
+    document.getElementById("memused").innerHTML=result.memunavail;
+    document.getElementById("memfree").innerHTML=result.memavail;
+    document.getElementById("memtotal").innerHTML=parseInt(result.memunavail) + parseInt(result.memavail);
+    document.getElementById("ram1").setAttribute("aria-valuenow", (100-result.memperc));
+    document.getElementById("ram1").style.width = (100-result.memperc) + "%";
+    document.getElementById("ram1").innerHTML = (100-result.memperc) + " %";
+    document.getElementById("ram2").setAttribute("aria-valuenow", result.memperc);
+    document.getElementById("ram2").style.width = result.memperc + "%";
+    document.getElementById("ram2").innerHTML = result.memperc + " %";
+    if (result.memperc >= warn_ram_space){
+      document.getElementById("ramt").innerHTML='Memory <font class="text-warning">(WARNING)</font>';
+      addWarning("Memory","hdd-network");
+      warn++;
+    }else{
+      document.getElementById("ramt").innerHTML='Memory <font class="text-success">(OK)</font>';
+    }
+    // Swap
+    document.getElementById("swapsys").innerHTML="Swap: <b>"+result.swapperc+"</b> % ("+result.swapused+" MB of "+result.swaptotal+" MB)";
+    // Overall
+    if (warn > 0){
+      var s = (warn>1) ? "s" : "";
+      document.getElementById("overallstate").innerHTML="<font class='text-danger'><i class='bi bi-exclamation-circle'></i>&nbsp;"+warn+" critical value"+s+" detected!</font>";
+      warnuser(warn);
+      document.title = hostname + ' - WARNING';
+    }else{
+      document.getElementById("overallstate").innerHTML="<font class='text-success'><i class='bi bi-check2-circle'></i>&nbsp;System status: OK</font>";
+      document.title = hostname + ' - OK';
+    }
+    $('.py').removeClass("progress-bar-striped progress-bar-animated");
+  }, function () {
+    $('#overallstate').html('<font class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Connection lost ...</font>');
+    alert("Failed updating the dashboard!");
+  });
+}
+// Live-Static-change
+timer=false;
+y=0;
+function togglep(force){
+  console.log("Togglep() - Timer: "+timer);
+  if(timer == false){
+    if(force){ y=100; }
+    updinterval=setInterval(function(){
+      if(y<100){
+        $('.py').width(y+'%');
+        y+=10;
+      }else{
+        $('.py').width(y+'%');
+        updatedb();
+        checkShutdown();
+        y=0;
+      }
+    }, (((upd_time_interval*1000)-1.5)/10));
+    timer=true;
+    console.log("Timer started");
+    $('#overallstate').html('<font class="text-info"><i class="bi bi-chevron-double-right"></i>&nbsp;Will be updated ...</font>');
+    $('.py').removeClass("bg-danger");
+    return '<i class="bi bi-pause"></i>';
+  }else{
+    clearInterval(updinterval);
+    timer=false;
+    console.log("Timer gestoppt");
+    $('#overallstate').html('<font class="text-muted"><i class="bi bi-clock"></i>&nbsp;Live Update disabled</font>');
+    document.title = "(OLD) " + document.title;
+    $('.py').addClass("bg-danger");
+    return '<i class="bi bi-play"></i>';
+  }
+}
+$('#staticBackdrop').on('hidden.bs.modal', function (e) {
+  updatedb();
+  $("footer").removeClass("fixed-bottom");
+  $("#lpwd").prop("disabled","");
+  $("#lbtn").prop("disabled","");
+  $("#lpwd").val("").removeClass("is-valid is-invalid");
+  $("#lbtn").html("Login").addClass("btn-primary").removeClass("btn-success");
+});
+function loginToServer(){
+  var value=$("#lpwd").val();
+  if(value.length==0){ $("#lpwd").addClass("is-invalid");return; }
+  $("#lpwd").prop("disabled","true");
+  $("#lbtn").prop("disabled","true");
+  $("#lbtn").html("Checking...");
+  var vReq = new ntwReq("backend/serv.php", function (data) {
+    console.log(data.responseText);
+    if(data.responseText=="correctCredentials"){
+      $("#lpwd").addClass("is-valid").removeClass("is-invalid");
+      $("#lbtn").html("Updating now...").addClass("btn-success").removeClass("btn-primary");
+      setTimeout(() => {
+        $(".row").removeClass("hidden");
+        $("#ldiv").removeClass("hidden");
+        $("#lock_section").html("<i class='bi bi-unlock' style='width: 100px;height:100px;color:#aaa'></i><br><font class='text-success'>You are authorized!<br><a href='javascript:location.reload(true)'>Reload</a> the page to load the full page content.</font>");
+        $('#staticBackdrop').modal('hide');
+      }, 1000);
+    }else{
+      $("#lpwd").prop("disabled","");
+      $("#lpwd").addClass("is-invalid");
+      $("#lbtn").html("Try again");
+      $("#lbtn").prop("disabled","");
+    }
+  }, null, "POST", true, "login=true&pw="+value);
+}
+$("#lpwd").keyup(function (event) {
+  if (event.keyCode === 13) {
+    event.preventDefault();
+    loginToServer();
+  }
+});
+$("#inputPassword2").keyup(function (event) {
+  if (event.keyCode === 13) {
+    event.preventDefault();
+    authorize(document.getElementById('inputPassword2').value);
+  }
+});
+function checkLauth(){
+  $("#pwrauth").hide();
+  $("#pwrCheck").show();
+  $("#pwrCheck2").hide();
+  setTimeout(() => {
+    var vReq = new ntwReq("backend/serv.php", function (data) {
+      console.log(data.responseText);
+      if(data.responseText=="invalid"){
+        $("#pwrauth").show();
+      }else{
+        $("#pwrCheck2").show();
+      }
+      $("#pwrCheck").hide();
+    }, null, "POST", true, "check=true");
+  }, 1000);
+}
+
+$('#indicatorContainer').radialIndicator({
+  barColor: temp_unit ? {
+    32: '#dfffbf',
+    122: '#45b438',
+    149: '#ff4000',
+    172: '#cc0000',
+    212: '#000'
+  } : {
+    0: '#dfffbf',
+    50: '#45b438',
+    65: '#ff4000',
+    78: '#cc0000',
+    100: '#000'
+  },
+  //barBgColor: '#888888',
+  initValue: temp_unit ? 32 : 0,
+  minValue: temp_unit ? 32 : 0,
+  maxValue: temp_unit ? 212 : 100,
+  format: temp_unit ? '##°F' : '##°C'
+});
+var radialObj = $('#indicatorContainer').data('radialIndicator');
+//now you can use instance to call different method on the radial progress.
+//like
+//radialObj.animate(25);
+
+
+function warnuser(c) {
+  var str=(c>1) ? "are" : "is";
+  var str2=(c>1) ? "s" : "";
+  mdtoast('<i class="bi bi-exclamation-circle"></i>&nbsp;There '+str+'&nbsp;<b>'+c+'</b>&nbsp;problem'+str2+', please check!', { type: 'error'});
+}
+function addWarning(problem, icon){
+  document.getElementById("sys11").innerHTML+='<div class="bg-danger card text-white text-center shadow m-1" style="max-width: 18rem;"><h5 style="margin-top: .75rem;" class="card-title"><i class="bi bi-'+icon+'"></i>&nbsp;'+problem+'</h5></div>';
+}
+
+$('#exampleModalCenter').on('shown.bs.modal', function (e) {
+  checkShutdown(function(){
+    if(shutdownCurrent){
+      document.getElementById("currentState").innerHTML='<div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-circle"></i>&nbsp;Existing shutdown will be overwritten.&nbsp;<button class="btn btn-sm btn-outline-danger" onclick="cancelShutdown();$(\'#exampleModalCenter\').modal(\'hide\');">Remove</button></div>';
+    }else{
+      document.getElementById("currentState").innerHTML='<div class="alert alert-success" role="alert"><i class="bi bi-check2-circle"></i>&nbsp;Currently there is no other power event planned.</div>';
+    }
+  });
+  checkLauth();
+});
+
+// Settings Form
+function checkPw() {
+  if(document.getElementById("pass").value!=document.getElementById("pass2").value){
+    $("#pass2").addClass("is-invalid").removeClass("is-valid");
+  }else{
+    $("#pass2").addClass("is-valid").removeClass("is-invalid");
+  }
+}
+
+document.querySelector('#applyBtn').onclick = function (e) {
+  e.preventDefault();
+  let sFormData = new FormData();
+  var val;
+  for (var i = 0; i < settingsKeys.length; i++) {
+    val = (settingsKeys[i] == "tempunit") ? document.getElementById(settingsKeys[i]).checked : document.getElementById(settingsKeys[i]).value;
+    console.log(settingsKeys[i], val);
+    if(val===""){
+      //val=defaultSettings[i];
+      //sFormData.append(settingsKeys[i], val);
+    }else if(val=="***notdefault***"){
+      // NOTE: password is altered (not default) -> leave as is
+    }else{
+      if(settingsKeys[i]=="pass") {
+        if(val!=document.getElementById("pass2").value){
+          $("#pass2").attr("onkeyup", "checkPw()");
+          $("#pass2").addClass("is-invalid").removeClass("is-valid");
+          return;
+        }
+      }
+      sFormData.append(settingsKeys[i], val);
+    }
+
+  }
+  sFormData.append("updateSettings", true);
+  console.log("settings data ", sFormData);
+  var vReq = new ntwReq("backend/serv.php", function (data) {
+    if(data.responseText=="1"){
+      mdtoast('<i class="bi bi-check2-circle"></i>&nbsp;Settings were updated!', { type: 'success'});
+      $("#sformFeedback").html('<div class="mt-2 alert alert-success alert-dismissible fade show" role="alert"><i class="bi bi-check2-circle"></i>&nbsp;Saved successfully! <a href="javascript:location.reload()" class="alert-link">Reload</a> the page for changes to take effect.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+    }else if(data.responseText=="nothing changed"){
+      mdtoast('<i class="bi bi-info-circle"></i>&nbsp;Nothing was changed!', { type: 'info'});
+      $("#sformFeedback").html('<div class="mt-2 alert alert-info alert-dismissible fade show" role="alert"><i class="bi bi-info-circle"></i>&nbsp;All set! You did not change anything.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+    }else{
+      mdtoast('<i class="bi bi-x-circle"></i>&nbsp;There was an error! ('+data.responseText+')', { type: 'error'});
+      $("#sformFeedback").html('<div class="mt-2 alert alert-danger" role="alert"><i class="bi bi-x-circle"></i>&nbsp;Config file (local.config) exists but could not be modified. Required permissions are not set correctly.<br><a class="alert-link" href="https://github.com/hniman135/RaspberryDashboard#valid-permissions" target="blank"><i class="bi bi-question-circle"></i>&nbsp;Show help</a></div>');
+    }
+  }, null, "POST", false, sFormData);
+};
+document.querySelector('#discardBtn').onclick = function (e) {
+  e.preventDefault();
+  document.getElementById('settingsForm').reset();
+};
+function loadDefaultsToForm() {
+  for (var i = 0; i < settingsKeys.length; i++) {
+    //document.getElementById(settingsKeys[i]).value=defaultSettings[i];
+    document.getElementById(settingsKeys[i]).value="";
+  }
+}
+document.querySelector('#defaultsBtn').onclick = function (e) {
+  e.preventDefault();
+  loadDefaultsToForm();
+};
