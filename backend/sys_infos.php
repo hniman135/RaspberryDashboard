@@ -4,6 +4,7 @@ if(isset($_GET["debug"])){
   ini_set ('display_errors', 'On');
 }
 // Authorization
+require_once __DIR__ . "/../timezone.php";
 session_start();
 if(!isset($_SESSION["rpidbauth"])){
   $output = array('auth' => 'false');

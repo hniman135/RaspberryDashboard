@@ -3,6 +3,7 @@ header('Access-Control-Allow-Origin: *');
 error_reporting (E_ALL);
 ini_set ('display_errors','On');
 
+require_once __DIR__ . "/timezone.php";
 session_start();
 
 require "backend/Config.php";
