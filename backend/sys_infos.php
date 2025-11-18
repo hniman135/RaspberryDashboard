@@ -51,8 +51,8 @@ exec("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",$cpufreq);
 $cpufreq = $cpufreq[0] / 1000;
 // load of processor
 $getLoad = sys_getloadavg();
-// time
-$timed=date("H:i:s");
+// time (use system clock to respect OS timezone)
+$timed = trim(shell_exec("date +'%H:%M:%S'"));
 // RAM
 $free = shell_exec('free -m'); // output in megabytes (-m)
 $free = (string)trim($free);
