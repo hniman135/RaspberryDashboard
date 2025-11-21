@@ -230,6 +230,21 @@ if($auth){
       </div>
     </div>
   </div>
+  
+  <!-- IoT Sensors Section (ESP32 + DHT22) -->
+  <hr class="my-4<?php if(!$auth){ echo " hidden"; } ?>">
+  <?php if($auth){ ?>
+  <h4><i class="bi bi-cloud-arrow-up"></i> Cảm Biến IoT (ESP32 + DHT22)</h4>
+  <div class="row mt-3" id="iot-sensors-container">
+    <!-- IoT sensor cards will be dynamically inserted here by iot_dashboard.js -->
+    <div class="col-12">
+      <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle"></i> Đang tải dữ liệu cảm biến...
+      </div>
+    </div>
+  </div>
+  <?php } ?>
+  
   <hr id="ldiv" class="my-4<?php if(!$auth){ echo " hidden"; } ?>"><!-- Static infos, that won't be updated -->
   <?php
   if($auth){
@@ -585,6 +600,7 @@ if($auth){
 <script src="js/Chart-2.9.3.min.js"></script>
 <script src="js/mdtoast.min.js?v=2.0.2"></script>
 <script src="js/radialIndicator-2.0.0.min.js"></script>
+<script src="js/iot_dashboard.js?v=1.1.1"></script>
 
 <script>
 warn_cpu_temp = <?=$config->get("thresholds.warn_cpu_temp")?>;

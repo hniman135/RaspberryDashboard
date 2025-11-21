@@ -1,0 +1,17 @@
+[Unit]
+Description=MQTT Subscriber for IoT Gateway
+After=network.target mosquitto.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html/RaspberryDashboard/backend
+ExecStart=/usr/bin/php /var/www/html/RaspberryDashboard/backend/mqtt_subscriber.php
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
