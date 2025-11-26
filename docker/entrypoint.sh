@@ -16,36 +16,21 @@ if [ ! -d "/var/www/html/data" ]; then
     chmod 775 /var/www/html/data
 fi
 
-# Create config directory if not exists (for persistent config)
-if [ ! -d "/var/www/html/config" ]; then
-    echo "[INIT] Creating config directory..."
-    mkdir -p /var/www/html/config
-    chown -R www-data:www-data /var/www/html/config
-    chmod 775 /var/www/html/config
-fi
-
-# Handle local.config - use persistent config volume
-if [ -d "/var/www/html/local.config" ]; then
-    echo "[INIT] Removing invalid local.config directory..."
-    rm -rf /var/www/html/local.config
-fi
-
-# Check if persistent local.config exists in config volume
-if [ -f "/var/www/html/config/local.config" ]; then
-    echo "[INIT] Using persistent local.config from config volume..."
-    chown www-data:www-data /var/www/html/config/local.config 2>/dev/null || true
-    chmod 666 /var/www/html/config/local.config 2>/dev/null || true
-    ln -sf /var/www/html/config/local.config /var/www/html/local.config
-elif [ ! -f "/var/www/html/local.config" ]; then
-    echo "[INIT] Creating default local.config in config volume..."
-    cat > /var/www/html/config/local.config << 'EOF'
+# Handle local.config permissions
+# File is bind-mounted from host, just ensure proper permissions
+if [ -f "/var/www/html/local.config" ]; then
+    echo "[INIT] Setting permissions for local.config..."
+    chown www-data:www-data /var/www/html/local.config 2>/dev/null || true
+    chmod 666 /var/www/html/local.config 2>/dev/null || true
+else
+    echo "[INIT] Creating default local.config..."
+    cat > /var/www/html/local.config << 'EOF'
 <?php
 return array();
 ?>
 EOF
-    chown www-data:www-data /var/www/html/config/local.config
-    chmod 666 /var/www/html/config/local.config
-    ln -sf /var/www/html/config/local.config /var/www/html/local.config
+    chown www-data:www-data /var/www/html/local.config
+    chmod 666 /var/www/html/local.config
 fi
 
 # Update MQTT configuration from environment variables

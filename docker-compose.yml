@@ -34,8 +34,8 @@ services:
       - /dev/bus/usb:/dev/bus/usb:ro
       # Persist database and data files
       - dashboard_data:/var/www/html/data
-      # Persist local config (keeps Telegram settings after rebuild)
-      - dashboard_config:/var/www/html/config
+      # Persist local config file directly (keeps settings after rebuild)
+      - ./local.config.docker:/var/www/html/local.config
       # Persist Mosquitto data
       - mosquitto_data:/var/lib/mosquitto
       - mosquitto_logs:/var/log/mosquitto
