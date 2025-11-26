@@ -8,10 +8,24 @@ services:
       dockerfile: Dockerfile
     container_name: rpi-dashboard
     restart: unless-stopped
+    # Enable hardware access for Raspberry Pi (vcgencmd, temperature, etc.)
+    privileged: true
+    devices:
+      - /dev/vchiq:/dev/vchiq           # VideoCore interface
+      - /dev/vcio:/dev/vcio             # VideoCore I/O
+      - /dev/video0:/dev/video0         # Camera (optional)
+    group_add:
+      - video                            # Required for vcgencmd access
     ports:
       - "8080:80"       # Web Dashboard
       - "1883:1883"     # MQTT Broker
     volumes:
+      # Mount host thermal zone for CPU temperature
+      - /sys/class/thermal:/sys/class/thermal:ro
+      # Mount host CPU info
+      - /sys/devices/system/cpu:/sys/devices/system/cpu:ro
+      # Mount /proc for system info
+      - /proc:/host_proc:ro
       # Persist database
       - dashboard_data:/var/www/html/data
       # Persist Mosquitto data

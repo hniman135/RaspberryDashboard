@@ -71,15 +71,16 @@ if($return["date"]=="0"){
 
 $isDocker = file_exists('/.dockerenv');
 $permtest=@shell_exec("vcgencmd measure_volts core 2>/dev/null");
-if($isDocker){
-  $permi1='<span class="text-muted"><i class="bi bi-dash-circle"></i>&nbsp;N/A (Docker)</span>';
-  $pclass1="secondary";
-}elseif($permtest === null || strlen($permtest)<2){
-  $permi1='<span class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Failed!</span>';
-  $pclass1="danger";
-}else{
+// vcgencmd should work if devices are properly mounted (even in Docker with privileged mode)
+if($permtest !== null && strlen(trim($permtest))>=2 && strpos($permtest,'failed')===false){
   $permi1='<span class="text-success"><i class="bi bi-check-circle"></i>&nbsp;Passed!</span>';
   $pclass1="success";
+}elseif($isDocker){
+  $permi1='<span class="text-warning"><i class="bi bi-exclamation-circle"></i>&nbsp;Requires privileged mode</span>';
+  $pclass1="warning";
+}else{
+  $permi1='<span class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Failed!</span>';
+  $pclass1="danger";
 }
 
 function isFileWritable($path){

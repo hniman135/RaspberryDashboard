@@ -8,6 +8,7 @@ LABEL description="Raspberry Pi Dashboard with IoT Gateway"
 LABEL version="1.0"
 
 # Install system dependencies
+# Note: libraspberrypi-bin provides vcgencmd for hardware info on Raspberry Pi
 RUN apt-get update && apt-get install -y \
     mosquitto \
     mosquitto-clients \
@@ -16,6 +17,11 @@ RUN apt-get update && apt-get install -y \
     procps \
     supervisor \
     curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Try to install Raspberry Pi userland tools (vcgencmd)
+# This only works on arm64/armhf architecture, will fail silently on others
+RUN apt-get update && apt-get install -y libraspberrypi-bin 2>/dev/null || true \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions

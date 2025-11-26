@@ -77,10 +77,13 @@ if($auth){
   $permissionerr=false;
   $isDocker = file_exists('/.dockerenv');
   $spannung=@substr(exec("vcgencmd measure_volts core 2>/dev/null"),5);
-  if( $isDocker || (strpos($spannung,"failed")!==false) || (strlen($spannung ?? '')<2) ){
+  
+  // Check if vcgencmd worked (should work with proper device mounts even in Docker)
+  if( (strpos($spannung,"failed")!==false) || (strlen($spannung ?? '')<2) ){
     if($isDocker){
-      $spannung="<span class='text-muted'>N/A (Docker)</span>";
-      $permissionerr=false; // Don't show error in Docker
+      // In Docker without proper device mounts
+      $spannung="<span class='text-muted'>N/A (requires privileged mode)</span>";
+      $permissionerr=false;
     }else{
       $spannung=$spannung."<div class='alert alert-danger' role='alert'>Reading of core voltage failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";
       $permissionerr=true;
@@ -313,12 +316,15 @@ if($auth){
           <?php 
           $isDocker = file_exists('/.dockerenv');
           $ot=@shell_exec("vcgencmd version 2>/dev/null");
-          if($isDocker){
-            echo '<samp class="text-muted">Firmware info N/A in Docker</samp>';
+          // Try vcgencmd (works if devices are mounted properly even in Docker)
+          if(!empty($ot) && strlen(trim($ot)) > 5){
+            echo '<samp>'.$ot.'</samp>';
+          }elseif($isDocker){
+            echo '<samp class="text-muted">Firmware info N/A (requires device mounts)</samp>';
           }elseif($permissionerr){
             echo "<div class='alert alert-danger' role='alert'>Execution of system command failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";
           }else{
-            echo '<samp>'.$ot.'</samp>';
+            echo '<samp class="text-muted">Firmware info unavailable</samp>';
           }
           ?>
           <p class="card-text"><small class="text-muted">Updated <span><?php echo date("H:i:s");?> (at page load)</span></small></p>
