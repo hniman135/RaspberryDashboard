@@ -1,0 +1,51 @@
+# Docker ignore file for RaspberryDashboard
+# ==========================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker files (don't copy into image)
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Development files
+.vscode/
+.idea/
+*.log
+*.tmp
+
+# Local configuration (mounted as volume)
+local.config
+
+# Data directory (mounted as volume)  
+data/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Test files
+tests/
+*.test.php
+phpunit.xml
+
+# Build artifacts
+node_modules/
+vendor/
+composer.lock
+
+# Temporary files
+tmp/
+temp/
+cache/

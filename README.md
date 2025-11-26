@@ -121,6 +121,21 @@ In order to use the remote shutdown functionality you have to give the user `www
 
 > **As always**: Make sure to change the default password (which is **root**) and choose a more secure one at first setup and consider more security if your dashboard is accessible on the network.
 
+## 🐳 Docker Deployment
+
+For quick deployment using Docker:
+
+```bash
+# Clone and run
+git clone https://github.com/hniman135/RaspberryDashboard.git
+cd RaspberryDashboard
+docker-compose up -d
+```
+
+Access the dashboard at `http://localhost:8080`
+
+📖 See [DOCKER.md](DOCKER.md) for full Docker documentation.
+
 ## License
 
 [**GPL-3.0**](LICENSE).
