@@ -76,10 +76,16 @@ if($auth){
 
   $permissionerr=false;
   $isDocker = file_exists('/.dockerenv');
-  $spannung=@substr(exec("vcgencmd measure_volts core 2>/dev/null"),5);
+  
+  // Get voltage - filter out any warning messages
+  $vcgencmd_output = @shell_exec("vcgencmd measure_volts core 2>/dev/null");
+  $spannung = "";
+  if($vcgencmd_output && preg_match('/volt=([0-9.]+V)/', $vcgencmd_output, $matches)){
+    $spannung = $matches[1];
+  }
   
   // Check if vcgencmd worked (should work with proper device mounts even in Docker)
-  if( (strpos($spannung,"failed")!==false) || (strlen($spannung ?? '')<2) ){
+  if(empty($spannung) || strlen($spannung) < 2){
     if($isDocker){
       // In Docker without proper device mounts
       $spannung="<span class='text-muted'>N/A (requires privileged mode)</span>";
