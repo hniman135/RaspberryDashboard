@@ -48,6 +48,14 @@ fi
 mkdir -p /var/log/mosquitto /var/lib/mosquitto /run/mosquitto
 chown -R mosquitto:mosquitto /var/log/mosquitto /var/lib/mosquitto /run/mosquitto
 
+# Ensure data directory permissions for www-data (for MQTT subscriber logs and database)
+echo "[INIT] Setting up data directory permissions..."
+touch /var/www/html/data/mqtt_subscriber.log
+touch /var/www/html/data/mqtt_subscriber_error.log
+chown -R www-data:www-data /var/www/html/data
+chmod 775 /var/www/html/data
+chmod 664 /var/www/html/data/mqtt_subscriber*.log
+
 # Ensure supervisor log directory exists
 mkdir -p /var/log/supervisor
 
