@@ -109,9 +109,16 @@ try {
                 $input = $_POST;
             }
             
+            // Get existing telegram config
+            $existingTelegram = $config->get('telegram') ?: [];
+            $existingToken = $existingTelegram['bot_token'] ?? '';
+            
+            // If bot_token is empty, keep the existing one
+            $newBotToken = !empty($input['bot_token']) ? $input['bot_token'] : $existingToken;
+            
             // Validate required fields
             if (isset($input['enabled']) && $input['enabled']) {
-                if (empty($input['bot_token'])) {
+                if (empty($newBotToken)) {
                     throw new Exception('Bot token is required');
                 }
                 if (empty($input['chat_id'])) {
@@ -124,7 +131,7 @@ try {
             
             $newConfig['telegram'] = [
                 'enabled' => (bool)($input['enabled'] ?? false),
-                'bot_token' => $input['bot_token'] ?? '',
+                'bot_token' => $newBotToken,
                 'chat_id' => $input['chat_id'] ?? '',
                 'cooldown_minutes' => (int)($input['cooldown_minutes'] ?? 5),
             ];
