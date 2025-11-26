@@ -45,11 +45,17 @@ if ($s > 0) {
   $uptime_string .= $s . $sw;
 }
 // CPU temperature
-exec("cat /sys/class/thermal/thermal_zone0/temp",$cputemp);
-$cputemp = $cputemp[0] / 1000;
+$cputemp = 0;
+exec("cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null",$cputemp_arr);
+if(!empty($cputemp_arr) && isset($cputemp_arr[0])){
+  $cputemp = $cputemp_arr[0] / 1000;
+}
 // CPU frequency
-exec("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",$cpufreq);
-$cpufreq = $cpufreq[0] / 1000;
+$cpufreq = 0;
+exec("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null",$cpufreq_arr);
+if(!empty($cpufreq_arr) && isset($cpufreq_arr[0])){
+  $cpufreq = $cpufreq_arr[0] / 1000;
+}
 // load of processor
 $getLoad = sys_getloadavg();
 // time (use system clock to respect OS timezone)

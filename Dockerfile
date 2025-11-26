@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     procps \
     supervisor \
     curl \
+    usbutils \
+    systemd \
     && rm -rf /var/lib/apt/lists/*
 
 # Try to install Raspberry Pi userland tools (vcgencmd)

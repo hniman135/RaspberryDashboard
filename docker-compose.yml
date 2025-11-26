@@ -30,6 +30,8 @@ services:
       - /proc:/host_proc:ro
       # Mount device tree for model info
       - /sys/firmware/devicetree/base:/sys/firmware/devicetree/base:ro
+      # Mount USB bus for lsusb
+      - /dev/bus/usb:/dev/bus/usb:ro
       # Persist database
       - dashboard_data:/var/www/html/data
       # Persist Mosquitto data

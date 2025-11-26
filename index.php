@@ -263,7 +263,18 @@ if($auth){
       <div class="card text-center">
         <div class="card-body">
           <h5 class="card-title"><i class="bi bi-hdd-rack"></i>&nbsp;Hardware</h5>
-          <?php print "<pre>"; echo shell_exec("lsusb"); print "</pre>"; ?>
+          <?php 
+          print "<pre>"; 
+          $lsusb = @shell_exec("lsusb 2>/dev/null");
+          if(!empty(trim($lsusb ?? ''))){
+            echo $lsusb;
+          }else{
+            // Fallback for Docker without USB access
+            echo "USB devices not available in container\n";
+            echo "Use privileged mode with --device=/dev/bus/usb\n";
+          }
+          print "</pre>"; 
+          ?>
           <p class="card-text"><small class="text-muted">Updated <span><?php echo date("H:i:s");?> (at page load)</span></small></p>
         </div>
       </div>
@@ -355,9 +366,32 @@ if($auth){
   <div class="row pt-3">
     <div class="col-sm-6 pt-1 pt-md-0">
     <div class="card text-center">
-      <div class="card-header">Hostnamectl</div>
+      <div class="card-header">System Info</div>
       <div class="card-body">
-        <?php print "<pre style='text-align: left!important;'>"; echo shell_exec("hostnamectl"); print "</pre>"; ?>
+        <?php 
+        print "<pre style='text-align: left!important;'>";
+        // Try hostnamectl first, fallback to manual info for Docker
+        $hostnamectl = @shell_exec("hostnamectl 2>/dev/null");
+        if(!empty(trim($hostnamectl ?? ''))){
+          echo $hostnamectl;
+        }else{
+          // Fallback for Docker environment
+          $hostname = trim(shell_exec("hostname"));
+          $kernel = php_uname('r');
+          $os = trim(@shell_exec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'\"' -f2"));
+          $arch = php_uname('m');
+          $model = trim(@shell_exec("cat /sys/firmware/devicetree/base/model 2>/dev/null")) ?: 'Docker Container';
+          echo "   Hostname: $hostname\n";
+          echo "     Kernel: Linux $kernel\n";
+          echo "         OS: $os\n";
+          echo "      Model: $model\n";
+          echo "       Arch: $arch\n";
+          if(file_exists('/.dockerenv')){
+            echo " Virtualization: docker\n";
+          }
+        }
+        print "</pre>"; 
+        ?>
         <p class="card-text"><small class="text-muted">Updated <span><?php echo date("H:i:s");?> (at page load)</span></small></p>
       </div>
     </div>
