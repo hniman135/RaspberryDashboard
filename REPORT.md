@@ -182,16 +182,29 @@ Một trong những tính năng quan trọng nhất được phát triển là h
 
 Hệ thống cảnh báo bao gồm các thành phần chính:
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  MQTT Subscriber │────▶│ TelegramNotifier │────▶│  Telegram Bot   │
-│  (Sensor Data)   │     │    (PHP Class)   │     │  (@hniman_bot)  │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                ▲
-┌─────────────────┐             │
-│  System Monitor  │────────────┘
-│  (CPU/RAM)       │
-└─────────────────┘
+```mermaid
+flowchart LR
+    subgraph Sources["Nguồn Dữ Liệu"]
+        MQTT["📡 MQTT Subscriber<br/>(Sensor Data)"]
+        SYS["🖥️ System Monitor<br/>(CPU/RAM)"]
+    end
+    
+    subgraph Core["Xử Lý"]
+        TN["📨 TelegramNotifier<br/>(PHP Class)"]
+    end
+    
+    subgraph Output["Đầu Ra"]
+        BOT["🤖 Telegram Bot<br/>(@hniman_bot)"]
+    end
+    
+    MQTT --> TN
+    SYS --> TN
+    TN --> BOT
+    
+    style MQTT fill:#e1f5fe,stroke:#0288d1
+    style SYS fill:#fff3e0,stroke:#ff9800
+    style TN fill:#f3e5f5,stroke:#9c27b0
+    style BOT fill:#e8f5e9,stroke:#4caf50
 ```
 
 ### 7.2. TelegramNotifier Class (`backend/TelegramNotifier.php`)
@@ -303,25 +316,33 @@ Hệ thống hỗ trợ triển khai bằng Docker để đơn giản hóa việ
 
 ### 8.1. Kiến Trúc Docker
 
-```
-┌─────────────────────────────────────────────────────┐
-│                 Docker Container                      │
-│  ┌───────────────────────────────────────────────┐  │
-│  │               Supervisor                        │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌──────────────────┐  │  │
-│  │  │ Apache  │ │Mosquitto│ │  MQTT Subscriber │  │  │
-│  │  │  :80    │ │  :1883  │ │    (PHP CLI)     │  │  │
-│  │  └─────────┘ └─────────┘ └──────────────────┘  │  │
-│  │                          ┌──────────────────┐  │  │
-│  │                          │  System Monitor  │  │  │
-│  │                          │    (PHP CLI)     │  │  │
-│  │                          └──────────────────┘  │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                       │
-│  Volumes:                                            │
-│  - ./data:/var/www/html/data (persistent)           │
-│  - ./local.config.docker:/var/www/html/local.config │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Container["🐳 Docker Container"]
+        subgraph Supervisor["📋 Supervisor"]
+            direction LR
+            Apache["🌐 Apache<br/>:80"]
+            Mosquitto["📡 Mosquitto<br/>:1883"]
+            MQTT["⚙️ MQTT Subscriber<br/>(PHP CLI)"]
+            SysMon["🖥️ System Monitor<br/>(PHP CLI)"]
+        end
+    end
+    
+    subgraph Volumes["💾 Volumes (Persistent)"]
+        Data["./data:/var/www/html/data"]
+        Config["./local.config.docker<br/>:/var/www/html/local.config"]
+    end
+    
+    Container -.-> Data
+    Container -.-> Config
+    
+    style Container fill:#e3f2fd,stroke:#1976d2
+    style Supervisor fill:#fff8e1,stroke:#ffa000
+    style Apache fill:#c8e6c9,stroke:#388e3c
+    style Mosquitto fill:#ffccbc,stroke:#e64a19
+    style MQTT fill:#d1c4e9,stroke:#7b1fa2
+    style SysMon fill:#b2ebf2,stroke:#0097a7
+    style Volumes fill:#f5f5f5,stroke:#616161
 ```
 
 ### 8.2. Supervisor Configuration
