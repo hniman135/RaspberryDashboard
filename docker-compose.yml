@@ -20,12 +20,16 @@ services:
       - "8080:80"       # Web Dashboard
       - "1883:1883"     # MQTT Broker
     volumes:
+      # Mount vcgencmd from host for hardware info
+      - /usr/bin/vcgencmd:/usr/bin/vcgencmd:ro
       # Mount host thermal zone for CPU temperature
       - /sys/class/thermal:/sys/class/thermal:ro
       # Mount host CPU info
       - /sys/devices/system/cpu:/sys/devices/system/cpu:ro
       # Mount /proc for system info
       - /proc:/host_proc:ro
+      # Mount device tree for model info
+      - /sys/firmware/devicetree/base:/sys/firmware/devicetree/base:ro
       # Persist database
       - dashboard_data:/var/www/html/data
       # Persist Mosquitto data
