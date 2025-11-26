@@ -33,6 +33,8 @@ fi
 # Check if persistent local.config exists in config volume
 if [ -f "/var/www/html/config/local.config" ]; then
     echo "[INIT] Using persistent local.config from config volume..."
+    chown www-data:www-data /var/www/html/config/local.config 2>/dev/null || true
+    chmod 666 /var/www/html/config/local.config 2>/dev/null || true
     ln -sf /var/www/html/config/local.config /var/www/html/local.config
 elif [ ! -f "/var/www/html/local.config" ]; then
     echo "[INIT] Creating default local.config in config volume..."
@@ -42,7 +44,7 @@ return array();
 ?>
 EOF
     chown www-data:www-data /var/www/html/config/local.config
-    chmod 664 /var/www/html/config/local.config
+    chmod 666 /var/www/html/config/local.config
     ln -sf /var/www/html/config/local.config /var/www/html/local.config
 fi
 
