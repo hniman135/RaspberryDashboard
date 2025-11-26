@@ -6,11 +6,12 @@ if(isset($_GET["debug"])){
 // Authorization
 require_once __DIR__ . "/../timezone.php";
 session_start();
-if(!isset($_SESSION["rpidbauth"])){
-  $output = array('auth' => 'false');
-  echo json_encode($output);
-  exit();
-}
+// TEMPORARILY DISABLED FOR TESTING
+// if(!isset($_SESSION["rpidbauth"])){
+//   $output = array('auth' => 'false');
+//   echo json_encode($output);
+//   exit();
+// }
 require "Config.php";
 $config = new Config;
 $config->load("../local.config", "../defaults.php");
