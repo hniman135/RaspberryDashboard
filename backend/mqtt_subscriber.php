@@ -8,12 +8,14 @@
  * - Store sensor data in SQLite database
  * - Handle offline buffering
  * - Provide data for dashboard API
+ * - Send Telegram notifications for alerts
  * 
  * Run as: php mqtt_subscriber.php
  * Or as service: sudo systemctl start mqtt-subscriber
  */
 
 require_once __DIR__ . '/Config.php';
+require_once __DIR__ . '/TelegramNotifier.php';
 
 // MQTT Configuration
 define('MQTT_BROKER', '127.0.0.1');
@@ -36,11 +38,21 @@ class MQTTSubscriber {
     private $logFile;
     private $startTime;
     private $messageCount = 0;
+    private $telegramNotifier;
+    private $config;
+    private $devicePreviousStatus = []; // Track previous device status for online/offline alerts
     
     public function __construct() {
         $this->startTime = time();
         $this->logFile = fopen(LOG_FILE, 'a');
         $this->log('INFO', 'MQTT Subscriber started');
+        
+        // Load config
+        $this->config = new Config();
+        $this->config->load(__DIR__ . '/../local.config', __DIR__ . '/../defaults.php');
+        
+        // Initialize Telegram notifier
+        $this->initTelegramNotifier();
         
         // Initialize database
         $this->initDatabase();
@@ -49,6 +61,34 @@ class MQTTSubscriber {
         if (function_exists('pcntl_signal')) {
             pcntl_signal(SIGTERM, [$this, 'shutdown']);
             pcntl_signal(SIGINT, [$this, 'shutdown']);
+        }
+    }
+    
+    private function initTelegramNotifier() {
+        $telegramConfig = [
+            'enabled' => (bool)$this->config->get('telegram.enabled'),
+            'bot_token' => $this->config->get('telegram.bot_token') ?: '',
+            'chat_id' => $this->config->get('telegram.chat_id') ?: '',
+            'cooldown_minutes' => (int)($this->config->get('telegram.cooldown_minutes') ?: 5),
+            'thresholds' => [
+                'cpu_temp_high' => (float)($this->config->get('telegram.thresholds.cpu_temp_high') ?: 70),
+                'cpu_temp_critical' => (float)($this->config->get('telegram.thresholds.cpu_temp_critical') ?: 80),
+                'ram_usage_high' => (float)($this->config->get('telegram.thresholds.ram_usage_high') ?: 85),
+                'ram_usage_critical' => (float)($this->config->get('telegram.thresholds.ram_usage_critical') ?: 95),
+                'sensor_temp_high' => (float)($this->config->get('telegram.thresholds.sensor_temp_high') ?: 40),
+                'sensor_temp_low' => (float)($this->config->get('telegram.thresholds.sensor_temp_low') ?: 5),
+                'sensor_humidity_high' => (float)($this->config->get('telegram.thresholds.sensor_humidity_high') ?: 90),
+                'sensor_humidity_low' => (float)($this->config->get('telegram.thresholds.sensor_humidity_low') ?: 20),
+                'battery_low' => (float)($this->config->get('telegram.thresholds.battery_low') ?: 20),
+            ],
+        ];
+        
+        $this->telegramNotifier = new TelegramNotifier($telegramConfig);
+        
+        if ($this->telegramNotifier->isConfigured()) {
+            $this->log('INFO', 'Telegram notifications enabled');
+        } else {
+            $this->log('INFO', 'Telegram notifications disabled or not configured');
         }
     }
     
@@ -209,6 +249,9 @@ class MQTTSubscriber {
                 $data['battery_level'] ?? 0
             ));
             
+            // Send Telegram alert if thresholds exceeded
+            $this->checkAndSendSensorAlert($data);
+            
             // Update device status
             $this->updateDeviceStatus([
                 'device_id' => $data['device_id'],
@@ -223,11 +266,34 @@ class MQTTSubscriber {
         }
     }
     
+    private function checkAndSendSensorAlert($data) {
+        if (!$this->telegramNotifier->isConfigured()) {
+            return;
+        }
+        
+        $deviceId = $data['device_id'];
+        $sensorData = [
+            'temperature' => $data['temperature'] ?? null,
+            'humidity' => $data['humidity'] ?? null,
+            'battery_level' => $data['battery_level'] ?? null,
+        ];
+        
+        $result = $this->telegramNotifier->alertSensor($deviceId, $sensorData);
+        
+        if ($result && $result['success']) {
+            $this->log('INFO', "Telegram alert sent for device: $deviceId");
+        }
+    }
+    
     private function updateDeviceStatus($data) {
         try {
             if (!isset($data['device_id'])) {
                 return;
             }
+            
+            $deviceId = $data['device_id'];
+            $newStatus = $data['status'] ?? 'online';
+            $previousStatus = $this->devicePreviousStatus[$deviceId] ?? null;
             
             $stmt = $this->db->prepare("
                 INSERT OR REPLACE INTO device_status (device_id, status, last_seen, updated_at)
@@ -235,16 +301,34 @@ class MQTTSubscriber {
             ");
             
             $stmt->execute([
-                ':device_id' => $data['device_id'],
-                ':status' => $data['status'] ?? 'online',
+                ':device_id' => $deviceId,
+                ':status' => $newStatus,
                 ':last_seen' => time()
             ]);
             
             $this->log('INFO', sprintf(
                 'Device %s status: %s',
-                $data['device_id'],
-                $data['status'] ?? 'online'
+                $deviceId,
+                $newStatus
             ));
+            
+            // Send Telegram notification on status change
+            if ($this->telegramNotifier->isConfigured() && $previousStatus !== null && $previousStatus !== $newStatus) {
+                if ($newStatus === 'offline') {
+                    $result = $this->telegramNotifier->alertDeviceOffline($deviceId, time());
+                    if ($result && $result['success']) {
+                        $this->log('INFO', "Telegram offline alert sent for device: $deviceId");
+                    }
+                } elseif ($newStatus === 'online' && $previousStatus === 'offline') {
+                    $result = $this->telegramNotifier->alertDeviceOnline($deviceId);
+                    if ($result && $result['success']) {
+                        $this->log('INFO', "Telegram online alert sent for device: $deviceId");
+                    }
+                }
+            }
+            
+            // Update tracked status
+            $this->devicePreviousStatus[$deviceId] = $newStatus;
             
         } catch (PDOException $e) {
             $this->log('ERROR', 'Failed to update device status: ' . $e->getMessage());

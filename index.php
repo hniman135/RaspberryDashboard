@@ -570,6 +570,104 @@ if($auth){
         </form>
 
         <hr />
+        
+        <!-- Telegram Notification Settings -->
+        <h4 class="mb-3"><i class="bi bi-telegram"></i> Telegram Notifications</h4>
+        <div class="card mb-3">
+          <div class="card-body">
+            <form id="telegramForm">
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="telegram_enabled">
+                <label class="form-check-label" for="telegram_enabled">Enable Telegram Notifications</label>
+              </div>
+              
+              <div id="telegramConfigFields">
+                <div class="mb-3">
+                  <label for="telegram_bot_token" class="form-label">Bot Token</label>
+                  <input type="password" class="form-control" id="telegram_bot_token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+                  <small class="form-text text-muted">Lấy từ @BotFather trên Telegram</small>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="telegram_chat_id" class="form-label">Chat ID</label>
+                  <input type="text" class="form-control" id="telegram_chat_id" placeholder="-1001234567890">
+                  <small class="form-text text-muted">Chat ID của bạn hoặc group. Dùng @userinfobot để lấy</small>
+                </div>
+                
+                <div class="mb-3">
+                  <label for="telegram_cooldown" class="form-label">Cooldown (phút)</label>
+                  <input type="number" class="form-control" id="telegram_cooldown" value="5" min="1" max="60">
+                  <small class="form-text text-muted">Thời gian chờ giữa các cảnh báo cùng loại</small>
+                </div>
+                
+                <div class="accordion mb-3" id="telegramThresholdsAccordion">
+                  <div class="accordion-item">
+                    <h2 class="accordion-header">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#telegramThresholds" aria-expanded="false">
+                        <i class="bi bi-sliders"></i>&nbsp;Alert Thresholds
+                      </button>
+                    </h2>
+                    <div id="telegramThresholds" class="accordion-collapse collapse" data-bs-parent="#telegramThresholdsAccordion">
+                      <div class="accordion-body">
+                        <div class="row g-2">
+                          <div class="col-md-6">
+                            <label class="form-label small">CPU Temp High (°C)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_cpu_temp_high" value="70">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">CPU Temp Critical (°C)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_cpu_temp_critical" value="80">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">RAM Usage High (%)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_ram_usage_high" value="85">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">RAM Usage Critical (%)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_ram_usage_critical" value="95">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">Sensor Temp High (°C)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_sensor_temp_high" value="40">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">Sensor Temp Low (°C)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_sensor_temp_low" value="5">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">Humidity High (%)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_sensor_humidity_high" value="90">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">Humidity Low (%)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_sensor_humidity_low" value="20">
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label small">Battery Low (%)</label>
+                            <input type="number" class="form-control form-control-sm" id="tg_battery_low" value="20">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="d-flex gap-2">
+                <button type="button" id="telegramSaveBtn" class="btn btn-success">
+                  <i class="bi bi-save"></i> Save
+                </button>
+                <button type="button" id="telegramTestBtn" class="btn btn-primary">
+                  <i class="bi bi-send"></i> Test
+                </button>
+              </div>
+              <div id="telegramFeedback" class="mt-2"></div>
+              <div id="telegramStatus" class="mt-2"></div>
+            </form>
+          </div>
+        </div>
+        
+        <hr />
         <div class="accordion" id="accordion">
           <div class="accordion-item">
             <h2 class="accordion-header">
@@ -663,6 +761,7 @@ if($auth){
 <script src="js/mdtoast.min.js?v=2.0.2"></script>
 <script src="js/radialIndicator-2.0.0.min.js"></script>
 <script src="js/iot_dashboard.js?v=1.1.1"></script>
+<script src="js/telegram_settings.js?v=1.0.0"></script>
 
 <script>
 warn_cpu_temp = <?=$config->get("thresholds.warn_cpu_temp")?>;
