@@ -41,6 +41,7 @@ class MQTTSubscriber {
     private $telegramNotifier;
     private $config;
     private $devicePreviousStatus = []; // Track previous device status for online/offline alerts
+    private $deviceLastDataTime = [];   // Track last time device sent sensor data
     
     public function __construct() {
         $this->startTime = time();
@@ -252,6 +253,9 @@ class MQTTSubscriber {
             // Send Telegram alert if thresholds exceeded
             $this->checkAndSendSensorAlert($data);
             
+            // Track last data time for this device
+            $this->deviceLastDataTime[$data['device_id']] = time();
+            
             // Update device status
             $this->updateDeviceStatus([
                 'device_id' => $data['device_id'],
@@ -294,6 +298,21 @@ class MQTTSubscriber {
             $deviceId = $data['device_id'];
             $newStatus = $data['status'] ?? 'online';
             $previousStatus = $this->devicePreviousStatus[$deviceId] ?? null;
+            
+            // Ignore offline status if we received sensor data recently (within 30 seconds)
+            // This prevents false offline alerts from LWT messages when device is actually online
+            if ($newStatus === 'offline') {
+                $lastDataTime = $this->deviceLastDataTime[$deviceId] ?? 0;
+                $timeSinceLastData = time() - $lastDataTime;
+                if ($timeSinceLastData < 30) {
+                    $this->log('DEBUG', sprintf(
+                        'Ignoring offline status for %s (received data %ds ago)',
+                        $deviceId,
+                        $timeSinceLastData
+                    ));
+                    return;
+                }
+            }
             
             $stmt = $this->db->prepare("
                 INSERT OR REPLACE INTO device_status (device_id, status, last_seen, updated_at)
