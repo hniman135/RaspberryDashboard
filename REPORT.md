@@ -221,19 +221,11 @@ flowchart LR
 -   **Rich Formatting:** Sử dụng Emoji và Markdown để thông báo dễ đọc hơn.
 -   **Persistent State:** Lưu trạng thái cooldown vào file để tránh mất khi restart service.
 
-**Code mẫu gửi cảnh báo:**
-```php
-$notifier = new TelegramNotifier($botToken, $chatId);
-$notifier->setCooldown(300); // 5 phút
-
-// Gửi cảnh báo nhiệt độ CPU cao
-$notifier->sendAlert('cpu_high', 
-    "⚠️ *CẢNH BÁO CPU QUÁ NHIỆT*\n\n" .
-    "🌡️ Nhiệt độ: *{$temp}°C*\n" .
-    "📊 Ngưỡng: {$threshold}°C\n" .
-    "⏰ Thời gian: " . date('H:i:s d/m/Y')
-);
-```
+**Quy trình gửi cảnh báo:**
+1. Khởi tạo đối tượng TelegramNotifier với Bot Token và Chat ID
+2. Thiết lập thời gian cooldown (mặc định 5 phút) để tránh gửi liên tục
+3. Gọi hàm `sendAlert()` với loại cảnh báo và nội dung tin nhắn
+4. Tin nhắn được format với Emoji và Markdown để dễ đọc trên Telegram
 
 ### 7.3. API Cấu Hình Telegram (`backend/api_telegram.php`)
 
@@ -260,16 +252,7 @@ Script daemon chạy song song với MQTT subscriber để giám sát tài nguy�
 File `backend/mqtt_subscriber.php` được mở rộng để tích hợp cảnh báo:
 
 **Cảnh báo độ ẩm:**
-```php
-if ($humidity > $thresholds['humidity_high']) {
-    $notifier->sendAlert('humidity_high', 
-        "💧 *CẢNH BÁO ĐỘ ẨM CAO*\n\n" .
-        "📟 Thiết bị: *{$deviceId}*\n" .
-        "💧 Độ ẩm: *{$humidity}%*\n" .
-        "📊 Ngưỡng: {$thresholds['humidity_high']}%"
-    );
-}
-```
+Khi nhận được dữ liệu từ cảm biến, hệ thống sẽ so sánh giá trị độ ẩm với ngưỡng cấu hình. Nếu độ ẩm vượt quá ngưỡng cao hoặc thấp hơn ngưỡng thấp, hệ thống sẽ gửi thông báo qua Telegram bao gồm: tên thiết bị, giá trị đo được và ngưỡng đã thiết lập.
 
 **Phát hiện thiết bị offline với chống cảnh báo giả:**
 -   Hệ thống theo dõi thời gian nhận dữ liệu cuối cùng của mỗi thiết bị
@@ -281,24 +264,11 @@ if ($humidity > $thresholds['humidity_high']) {
 **Vấn đề:** Mỗi khi thay đổi cấu hình Telegram (ngưỡng cảnh báo, bot token), phải restart container hoặc service để áp dụng.
 
 **Giải pháp:** MQTT Subscriber tự động kiểm tra thay đổi file config:
--   Kiểm tra `filemtime()` của file `local.config` mỗi 30 giây
--   Nếu file thay đổi, tự động reload config mà không cần restart
--   Log thông báo khi reload thành công
 
-```php
-private function checkConfigReload() {
-    $now = time();
-    if ($now - $this->lastConfigCheck < 30) return;
-    $this->lastConfigCheck = $now;
-    
-    $mtime = filemtime($this->configFile);
-    if ($mtime > $this->configLastModified) {
-        $this->loadConfig();
-        $this->configLastModified = $mtime;
-        $this->log("Config reloaded automatically");
-    }
-}
-```
+1. **Kiểm tra định kỳ:** Mỗi 30 giây, hệ thống kiểm tra thời gian sửa đổi cuối cùng của file cấu hình
+2. **Phát hiện thay đổi:** So sánh thời gian sửa đổi hiện tại với lần kiểm tra trước
+3. **Tự động reload:** Nếu file đã thay đổi, nạp lại toàn bộ cấu hình mà không cần restart service
+4. **Ghi log:** Thông báo trong log khi reload thành công để tiện theo dõi
 
 ### 7.7. Giao Diện Cấu Hình (`js/telegram_settings.js`)
 
@@ -347,34 +317,24 @@ flowchart TB
 
 ### 8.2. Supervisor Configuration
 
-File `docker/supervisord.conf` quản lý tất cả các process:
+Supervisor đóng vai trò như "người quản lý" các tiến trình bên trong container, đảm bảo tất cả các service luôn chạy ổn định:
 
-```ini
-[program:apache2]
-command=apachectl -DFOREGROUND
-stdout_logfile=/dev/stdout
-stderr_logfile=/dev/stderr
+| Service | Chức năng | Ghi chú |
+|---------|-----------|--------|
+| **Apache2** | Web Server phục vụ giao diện Dashboard | Chạy ở chế độ foreground, log ra stdout |
+| **Mosquitto** | MQTT Broker trung chuyển tin nhắn | Lắng nghe cổng 1883 |
+| **MQTT Subscriber** | Nhận dữ liệu cảm biến, lưu vào DB | Script PHP chạy liên tục |
+| **System Monitor** | Giám sát CPU/RAM, gửi cảnh báo | Kiểm tra mỗi 60 giây |
 
-[program:mosquitto]
-command=/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf
-
-[program:mqtt-subscriber]
-command=php /var/www/html/backend/mqtt_subscriber.php
-
-[program:system-monitor]
-command=php /var/www/html/backend/system_monitor.php
-```
+Nếu bất kỳ service nào bị crash, Supervisor sẽ tự động khởi động lại.
 
 ### 8.3. Bind Mount vs Volume
 
 **Vấn đề gặp phải:** Symlink không hoạt động đúng khi mount volume từ host vào container.
 
-**Giải pháp:** Sử dụng bind mount trực tiếp file config:
-```yaml
-volumes:
-  - ./local.config.docker:/var/www/html/local.config
-  - ./data:/var/www/html/data
-```
+**Giải pháp:** Sử dụng bind mount trực tiếp thay vì symlink:
+-   **File cấu hình:** Mount file `local.config.docker` từ máy host vào đường dẫn `/var/www/html/local.config` trong container
+-   **Thư mục data:** Mount thư mục `./data` để lưu trữ database và log file, dữ liệu sẽ được giữ lại ngay cả khi container bị xóa
 
 ### 8.4. Xử Lý Permission
 
