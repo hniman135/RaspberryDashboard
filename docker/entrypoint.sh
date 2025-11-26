@@ -16,7 +16,12 @@ if [ ! -d "/var/www/html/data" ]; then
     chmod 775 /var/www/html/data
 fi
 
-# Create local.config if not exists
+# Create local.config if not exists or is a directory
+if [ -d "/var/www/html/local.config" ]; then
+    echo "[INIT] Removing invalid local.config directory..."
+    rm -rf /var/www/html/local.config
+fi
+
 if [ ! -f "/var/www/html/local.config" ]; then
     echo "[INIT] Creating default local.config..."
     cat > /var/www/html/local.config << 'EOF'

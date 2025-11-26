@@ -14,8 +14,6 @@ services:
     volumes:
       # Persist database
       - dashboard_data:/var/www/html/data
-      # Persist local config
-      - ./local.config:/var/www/html/local.config
       # Persist Mosquitto data
       - mosquitto_data:/var/lib/mosquitto
       - mosquitto_logs:/var/log/mosquitto
