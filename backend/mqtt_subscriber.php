@@ -42,6 +42,10 @@ class MQTTSubscriber {
     private $config;
     private $devicePreviousStatus = []; // Track previous device status for online/offline alerts
     private $deviceLastDataTime = [];   // Track last time device sent sensor data
+    private $configFile;
+    private $configLastModified = 0;
+    private $configCheckInterval = 30;  // Check config every 30 seconds
+    private $lastConfigCheck = 0;
     
     public function __construct() {
         $this->startTime = time();
@@ -49,11 +53,8 @@ class MQTTSubscriber {
         $this->log('INFO', 'MQTT Subscriber started');
         
         // Load config
-        $this->config = new Config();
-        $this->config->load(__DIR__ . '/../local.config', __DIR__ . '/../defaults.php');
-        
-        // Initialize Telegram notifier
-        $this->initTelegramNotifier();
+        $this->configFile = __DIR__ . '/../local.config';
+        $this->loadConfig();
         
         // Initialize database
         $this->initDatabase();
@@ -62,6 +63,38 @@ class MQTTSubscriber {
         if (function_exists('pcntl_signal')) {
             pcntl_signal(SIGTERM, [$this, 'shutdown']);
             pcntl_signal(SIGINT, [$this, 'shutdown']);
+        }
+    }
+    
+    private function loadConfig() {
+        $this->config = new Config();
+        $this->config->load($this->configFile, __DIR__ . '/../defaults.php');
+        $this->configLastModified = file_exists($this->configFile) ? filemtime($this->configFile) : 0;
+        $this->lastConfigCheck = time();
+        
+        // Initialize Telegram notifier
+        $this->initTelegramNotifier();
+    }
+    
+    private function checkConfigReload() {
+        // Only check periodically to avoid excessive file access
+        if (time() - $this->lastConfigCheck < $this->configCheckInterval) {
+            return;
+        }
+        
+        $this->lastConfigCheck = time();
+        
+        if (!file_exists($this->configFile)) {
+            return;
+        }
+        
+        $currentModified = filemtime($this->configFile);
+        clearstatcache(true, $this->configFile);
+        
+        if ($currentModified > $this->configLastModified) {
+            $this->log('INFO', 'Config file changed, reloading...');
+            $this->loadConfig();
+            $this->log('INFO', 'Config reloaded successfully');
         }
     }
     
@@ -177,6 +210,9 @@ class MQTTSubscriber {
             
             $line = trim($line);
             if (empty($line)) continue;
+            
+            // Check if config needs to be reloaded
+            $this->checkConfigReload();
             
             // Parse mosquitto_sub output: "topic payload"
             $parts = explode(' ', $line, 2);
