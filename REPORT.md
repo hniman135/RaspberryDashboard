@@ -174,21 +174,230 @@ Giao diện giám sát được xây dựng bằng **JavaScript thuần (Vanilla
 
 ---
 
-## CHƯƠNG 7: KẾT QUẢ & ĐÁNH GIÁ
+## CHƯƠNG 7: HỆ THỐNG CẢNH BÁO QUA TELEGRAM (TELEGRAM BOT NOTIFICATION)
 
-### 6.1. Kết Quả Đạt Được
+Một trong những tính năng quan trọng nhất được phát triển là hệ thống cảnh báo tự động qua Telegram. Thay vì phải liên tục theo dõi dashboard, người quản trị sẽ nhận được thông báo ngay lập tức khi có sự cố xảy ra.
+
+### 7.1. Kiến Trúc Hệ Thống Cảnh Báo
+
+Hệ thống cảnh báo bao gồm các thành phần chính:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  MQTT Subscriber │────▶│ TelegramNotifier │────▶│  Telegram Bot   │
+│  (Sensor Data)   │     │    (PHP Class)   │     │  (@hniman_bot)  │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                                ▲
+┌─────────────────┐             │
+│  System Monitor  │────────────┘
+│  (CPU/RAM)       │
+└─────────────────┘
+```
+
+### 7.2. TelegramNotifier Class (`backend/TelegramNotifier.php`)
+
+Đây là class core xử lý toàn bộ logic gửi thông báo:
+
+**Các tính năng chính:**
+-   **Cooldown Mechanism:** Tránh spam bằng cách giới hạn tần suất gửi cảnh báo (mặc định 5 phút giữa các cảnh báo cùng loại).
+-   **Alert Types:** Hỗ trợ nhiều loại cảnh báo:
+    -   `cpu_high`: Nhiệt độ CPU vượt ngưỡng
+    -   `ram_high`: Sử dụng RAM vượt ngưỡng
+    -   `humidity_high` / `humidity_low`: Độ ẩm ngoài khoảng cho phép
+    -   `device_offline` / `device_online`: Thiết bị mất/phục hồi kết nối
+-   **Rich Formatting:** Sử dụng Emoji và Markdown để thông báo dễ đọc hơn.
+-   **Persistent State:** Lưu trạng thái cooldown vào file để tránh mất khi restart service.
+
+**Code mẫu gửi cảnh báo:**
+```php
+$notifier = new TelegramNotifier($botToken, $chatId);
+$notifier->setCooldown(300); // 5 phút
+
+// Gửi cảnh báo nhiệt độ CPU cao
+$notifier->sendAlert('cpu_high', 
+    "⚠️ *CẢNH BÁO CPU QUÁ NHIỆT*\n\n" .
+    "🌡️ Nhiệt độ: *{$temp}°C*\n" .
+    "📊 Ngưỡng: {$threshold}°C\n" .
+    "⏰ Thời gian: " . date('H:i:s d/m/Y')
+);
+```
+
+### 7.3. API Cấu Hình Telegram (`backend/api_telegram.php`)
+
+Endpoint RESTful cho phép cấu hình Telegram từ giao diện web:
+
+-   **GET:** Lấy cấu hình hiện tại (bot token được ẩn một phần vì lý do bảo mật)
+-   **POST:** Cập nhật cấu hình (bot token, chat ID, ngưỡng cảnh báo, cooldown)
+-   **Bảo mật:** Yêu cầu session đăng nhập hợp lệ
+
+**Xử lý đặc biệt:** Khi người dùng chỉ thay đổi ngưỡng cảnh báo mà không nhập lại bot token, hệ thống sẽ giữ nguyên token cũ thay vì xóa nó.
+
+### 7.4. Giám Sát CPU/RAM (`backend/system_monitor.php`)
+
+Script daemon chạy song song với MQTT subscriber để giám sát tài nguyên hệ thống:
+
+-   **Chu kỳ kiểm tra:** Mỗi 60 giây
+-   **Các chỉ số giám sát:**
+    -   Nhiệt độ CPU (đọc từ `/sys/class/thermal/thermal_zone0/temp`)
+    -   Sử dụng RAM (đọc từ `/proc/meminfo`)
+-   **Tích hợp Telegram:** Gửi cảnh báo khi vượt ngưỡng cấu hình
+
+### 7.5. Tích Hợp Trong MQTT Subscriber
+
+File `backend/mqtt_subscriber.php` được mở rộng để tích hợp cảnh báo:
+
+**Cảnh báo độ ẩm:**
+```php
+if ($humidity > $thresholds['humidity_high']) {
+    $notifier->sendAlert('humidity_high', 
+        "💧 *CẢNH BÁO ĐỘ ẨM CAO*\n\n" .
+        "📟 Thiết bị: *{$deviceId}*\n" .
+        "💧 Độ ẩm: *{$humidity}%*\n" .
+        "📊 Ngưỡng: {$thresholds['humidity_high']}%"
+    );
+}
+```
+
+**Phát hiện thiết bị offline với chống cảnh báo giả:**
+-   Hệ thống theo dõi thời gian nhận dữ liệu cuối cùng của mỗi thiết bị
+-   Nếu thiết bị gửi status "offline" nhưng vẫn có dữ liệu mới trong vòng 30 giây, sẽ bỏ qua cảnh báo offline
+-   Khi thiết bị online trở lại, gửi thông báo phục hồi
+
+### 7.6. Auto-Reload Configuration
+
+**Vấn đề:** Mỗi khi thay đổi cấu hình Telegram (ngưỡng cảnh báo, bot token), phải restart container hoặc service để áp dụng.
+
+**Giải pháp:** MQTT Subscriber tự động kiểm tra thay đổi file config:
+-   Kiểm tra `filemtime()` của file `local.config` mỗi 30 giây
+-   Nếu file thay đổi, tự động reload config mà không cần restart
+-   Log thông báo khi reload thành công
+
+```php
+private function checkConfigReload() {
+    $now = time();
+    if ($now - $this->lastConfigCheck < 30) return;
+    $this->lastConfigCheck = $now;
+    
+    $mtime = filemtime($this->configFile);
+    if ($mtime > $this->configLastModified) {
+        $this->loadConfig();
+        $this->configLastModified = $mtime;
+        $this->log("Config reloaded automatically");
+    }
+}
+```
+
+### 7.7. Giao Diện Cấu Hình (`js/telegram_settings.js`)
+
+Giao diện web cho phép người dùng:
+-   Nhập Bot Token và Chat ID
+-   Cấu hình ngưỡng cảnh báo (CPU, độ ẩm cao/thấp)
+-   Đặt thời gian cooldown giữa các cảnh báo
+-   Gửi tin nhắn test để kiểm tra kết nối
+
+---
+
+## CHƯƠNG 8: TRIỂN KHAI DOCKER (CONTAINERIZATION)
+
+Hệ thống hỗ trợ triển khai bằng Docker để đơn giản hóa việc cài đặt và đảm bảo tính nhất quán môi trường.
+
+### 8.1. Kiến Trúc Docker
+
+```
+┌─────────────────────────────────────────────────────┐
+│                 Docker Container                      │
+│  ┌───────────────────────────────────────────────┐  │
+│  │               Supervisor                        │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌──────────────────┐  │  │
+│  │  │ Apache  │ │Mosquitto│ │  MQTT Subscriber │  │  │
+│  │  │  :80    │ │  :1883  │ │    (PHP CLI)     │  │  │
+│  │  └─────────┘ └─────────┘ └──────────────────┘  │  │
+│  │                          ┌──────────────────┐  │  │
+│  │                          │  System Monitor  │  │  │
+│  │                          │    (PHP CLI)     │  │  │
+│  │                          └──────────────────┘  │  │
+│  └───────────────────────────────────────────────┘  │
+│                                                       │
+│  Volumes:                                            │
+│  - ./data:/var/www/html/data (persistent)           │
+│  - ./local.config.docker:/var/www/html/local.config │
+└─────────────────────────────────────────────────────┘
+```
+
+### 8.2. Supervisor Configuration
+
+File `docker/supervisord.conf` quản lý tất cả các process:
+
+```ini
+[program:apache2]
+command=apachectl -DFOREGROUND
+stdout_logfile=/dev/stdout
+stderr_logfile=/dev/stderr
+
+[program:mosquitto]
+command=/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf
+
+[program:mqtt-subscriber]
+command=php /var/www/html/backend/mqtt_subscriber.php
+
+[program:system-monitor]
+command=php /var/www/html/backend/system_monitor.php
+```
+
+### 8.3. Bind Mount vs Volume
+
+**Vấn đề gặp phải:** Symlink không hoạt động đúng khi mount volume từ host vào container.
+
+**Giải pháp:** Sử dụng bind mount trực tiếp file config:
+```yaml
+volumes:
+  - ./local.config.docker:/var/www/html/local.config
+  - ./data:/var/www/html/data
+```
+
+### 8.4. Xử Lý Permission
+
+Trong môi trường Docker, file `local.config` có thể không có quyền ghi. Giải pháp:
+-   Sử dụng `@chmod()` để suppress error khi không thể thay đổi permission
+-   Container chạy với `privileged: true` để truy cập thermal sensors
+
+---
+
+## CHƯƠNG 9: KẾT QUẢ & ĐÁNH GIÁ
+
+### 9.1. Kết Quả Đạt Được
 -   **Hệ thống hoạt động ổn định:** Đã triển khai thành công trên Raspberry Pi 4 và ESP32 thực tế.
 -   **Đáp ứng yêu cầu thời gian thực:** Dữ liệu được cập nhật mỗi 2 giây. Độ trễ từ lúc thay đổi nhiệt độ môi trường đến khi số nhảy trên web là dưới 1 giây (trong mạng LAN).
 -   **Khả năng mở rộng:** Có thể thêm nhiều Node ESP32 vào hệ thống mà không cần sửa code Server (nhờ cơ chế Dynamic Discovery).
+-   **Cảnh báo tự động:** Hệ thống Telegram Bot hoạt động ổn định, gửi thông báo kịp thời khi có sự cố.
+-   **Hot-reload config:** Thay đổi cấu hình được áp dụng tự động sau 30 giây mà không cần restart service.
+-   **Docker deployment:** Triển khai đơn giản với một lệnh `docker compose up -d`.
 
-### 6.2. Hạn Chế Tồn Tại
+### 9.2. Hạn Chế Tồn Tại
 -   **Bảo mật:** Hiện tại MQTT chỉ dùng xác thực Username/Password (Plain text). Chưa triển khai mã hóa TLS/SSL, có nguy cơ bị nghe lén trong mạng LAN không tin cậy.
 -   **Lưu trữ:** SQLite phù hợp cho quy mô nhỏ/trung bình. Nếu chạy liên tục nhiều năm với tần suất 2s/lần, file DB sẽ lớn nhanh. Cần cơ chế Archive (lưu trữ) hoặc Rotate (xoay vòng) dữ liệu cũ.
 
 ---
 
-## CHƯƠNG 7: KẾT LUẬN
+## CHƯƠNG 10: KẾT LUẬN
 
 Đồ án đã xây dựng thành công một hệ thống giám sát IoT hoàn chỉnh từ phần cứng đến phần mềm, đáp ứng đầy đủ các tiêu chí kỹ thuật đề ra trong `YeuCau.txt`. Hệ thống chứng minh được tính khả thi của việc sử dụng các công nghệ nguồn mở (PHP, SQLite, Mosquitto) trên nền tảng phần cứng chi phí thấp (RPi, ESP32) để giải quyết bài toán giám sát môi trường cục bộ với hiệu năng cao và độ trễ thấp.
 
-Đây là nền tảng vững chắc để phát triển tiếp các tính năng nâng cao như cảnh báo qua Email/Telegram, điều khiển thiết bị ngoại vi (bật quạt/máy bơm) dựa trên thông số cảm biến tự động.
+**Các tính năng nổi bật đã triển khai:**
+
+1. **Thu thập dữ liệu thời gian thực:** ESP32 gửi dữ liệu nhiệt độ/độ ẩm mỗi 2 giây qua MQTT.
+
+2. **Dashboard trực quan:** Giao diện web responsive hiển thị dữ liệu real-time với biểu đồ Chart.js.
+
+3. **Giám sát tài nguyên:** Theo dõi CPU, RAM, Storage của Raspberry Pi với cảnh báo trực quan.
+
+4. **Cảnh báo Telegram tự động:** 
+   - Thông báo ngay lập tức khi có sự cố (CPU quá nhiệt, độ ẩm vượt ngưỡng, thiết bị offline)
+   - Cơ chế cooldown chống spam
+   - Chống cảnh báo giả (false positive) cho trạng thái offline
+
+5. **Hot-reload configuration:** Thay đổi cấu hình được áp dụng tự động mà không cần restart service.
+
+6. **Docker deployment:** Đóng gói toàn bộ hệ thống trong container, triển khai với một lệnh duy nhất.
+
+Đây là nền tảng vững chắc để phát triển tiếp các tính năng nâng cao như điều khiển thiết bị ngoại vi (bật quạt/máy bơm) dựa trên thông số cảm biến tự động, hoặc tích hợp AI để phân tích xu hướng dữ liệu.
