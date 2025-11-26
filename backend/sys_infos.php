@@ -20,10 +20,10 @@ $uptime = shell_exec("cat /proc/uptime");
 $uptime = explode(" ", $uptime);
 $uptime = (int) $uptime[0];
 $y = (int) floor($uptime / 60 / 60 / 24 / 365);
-$d = (int) floor($uptime / 60 / 60 / 24) % 365;
-$h = (int) floor(($uptime / 3600) % 24);
-$m = (int) floor(($uptime / 60) % 60);
-$s = (int) $uptime % 60;
+$d = ((int) floor($uptime / 60 / 60 / 24)) % 365;
+$h = ((int) floor($uptime / 3600)) % 24;
+$m = ((int) floor($uptime / 60)) % 60;
+$s = $uptime % 60;
 $uptime_string = '';
 if ($y > 0) {
   $yw = $y > 1 ? ' years ' : ' year ';
