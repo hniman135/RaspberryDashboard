@@ -75,10 +75,16 @@ if($auth){
   //
 
   $permissionerr=false;
-  $spannung=substr(exec("vcgencmd measure_volts core"),5);
-  if( (strpos($spannung,"failed")!==false) || (strlen($spannung)<2) ){
-    $spannung=$spannung."<div class='alert alert-danger' role='alert'>Reading of core voltage failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";
-    $permissionerr=true;
+  $isDocker = file_exists('/.dockerenv');
+  $spannung=@substr(exec("vcgencmd measure_volts core 2>/dev/null"),5);
+  if( $isDocker || (strpos($spannung,"failed")!==false) || (strlen($spannung ?? '')<2) ){
+    if($isDocker){
+      $spannung="<span class='text-muted'>N/A (Docker)</span>";
+      $permissionerr=false; // Don't show error in Docker
+    }else{
+      $spannung=$spannung."<div class='alert alert-danger' role='alert'>Reading of core voltage failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";
+      $permissionerr=true;
+    }
   }
 }
 ?>
@@ -303,8 +309,18 @@ if($auth){
       <div class="card text-center">
         <div class="card-header">Model</div>
         <div class="card-body">
-          <samp><?php echo exec("cat /sys/firmware/devicetree/base/model");?></samp>
-          <?php $ot=shell_exec("vcgencmd version");if($permissionerr){echo "<div class='alert alert-danger' role='alert'>Execution of system command failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";}else{echo '<samp>'.$ot.'</samp>';}?>
+          <samp><?php echo @exec("cat /sys/firmware/devicetree/base/model 2>/dev/null") ?: (file_exists('/.dockerenv') ? 'Docker Container' : 'Unknown');?></samp>
+          <?php 
+          $isDocker = file_exists('/.dockerenv');
+          $ot=@shell_exec("vcgencmd version 2>/dev/null");
+          if($isDocker){
+            echo '<samp class="text-muted">Firmware info N/A in Docker</samp>';
+          }elseif($permissionerr){
+            echo "<div class='alert alert-danger' role='alert'>Execution of system command failed. Please run<br><kbd>sudo usermod -aG video www-data</kbd><br>in a terminal to solve this problem.&nbsp;<a href='https://github.com/hniman135/RaspberryDashboard#core-voltage-or-other-hardware-info-output-is-not-shown-optional' target='blank'><i class='bi bi-question-circle'></i>&nbsp;Help</a></div>";
+          }else{
+            echo '<samp>'.$ot.'</samp>';
+          }
+          ?>
           <p class="card-text"><small class="text-muted">Updated <span><?php echo date("H:i:s");?> (at page load)</span></small></p>
         </div>
       </div>
