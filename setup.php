@@ -70,7 +70,7 @@ if($return["date"]=="0"){
 }
 
 $permtest=shell_exec("vcgencmd measure_volts core");
-if(strlen($permtest)<2){
+if($permtest === null || strlen($permtest)<2){
   $permi1='<span class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Failed!</span>';
   $pclass1="danger";
 }else{
