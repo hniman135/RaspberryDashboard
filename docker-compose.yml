@@ -32,8 +32,10 @@ services:
       - /sys/firmware/devicetree/base:/sys/firmware/devicetree/base:ro
       # Mount USB bus for lsusb
       - /dev/bus/usb:/dev/bus/usb:ro
-      # Persist database
+      # Persist database and data files
       - dashboard_data:/var/www/html/data
+      # Persist local config (keeps Telegram settings after rebuild)
+      - dashboard_config:/var/www/html/config
       # Persist Mosquitto data
       - mosquitto_data:/var/lib/mosquitto
       - mosquitto_logs:/var/log/mosquitto
@@ -98,6 +100,8 @@ networks:
 volumes:
   dashboard_data:
     name: rpi_dashboard_data
+  dashboard_config:
+    name: rpi_dashboard_config
   mosquitto_data:
     name: rpi_mosquitto_data
   mosquitto_logs:
