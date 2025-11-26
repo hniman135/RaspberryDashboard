@@ -64,13 +64,17 @@ if($return["date"]=="0"){
   $permi2='<span class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Failed!</span>';
   $pclass2="danger";
 }else{
-  system('sudo /sbin/shutdown -c');
+  @system('sudo /sbin/shutdown -c 2>/dev/null');
   $permi2='<span class="text-success"><i class="bi bi-check-circle"></i>&nbsp;Passed!</span>';
   $pclass2="success";
 }
 
-$permtest=shell_exec("vcgencmd measure_volts core");
-if($permtest === null || strlen($permtest)<2){
+$isDocker = file_exists('/.dockerenv');
+$permtest=@shell_exec("vcgencmd measure_volts core 2>/dev/null");
+if($isDocker){
+  $permi1='<span class="text-muted"><i class="bi bi-dash-circle"></i>&nbsp;N/A (Docker)</span>';
+  $pclass1="secondary";
+}elseif($permtest === null || strlen($permtest)<2){
   $permi1='<span class="text-danger"><i class="bi bi-x-circle"></i>&nbsp;Failed!</span>';
   $pclass1="danger";
 }else{
