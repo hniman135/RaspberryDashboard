@@ -6,3 +6,6 @@
 
 ## Synchronization
 - After completing a function, push the source to github, then sync the source on raspberry
+
+## Directory
+- Project root: /var/www/html/rpi-dashboard
