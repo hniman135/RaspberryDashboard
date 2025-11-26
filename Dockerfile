@@ -45,7 +45,8 @@ RUN mkdir -p /var/www/html/data \
     && mkdir -p /var/lib/mosquitto \
     && mkdir -p /run/mosquitto \
     && chown -R www-data:www-data /var/www/html \
-    && chown -R mosquitto:mosquitto /var/log/mosquitto /var/lib/mosquitto /run/mosquitto
+    && chown -R mosquitto:mosquitto /var/log/mosquitto /var/lib/mosquitto /run/mosquitto \
+    && usermod -aG video www-data
 
 # Copy application files
 COPY --chown=www-data:www-data . /var/www/html/
