@@ -22,30 +22,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/TelegramNotifier.php';
+require_once __DIR__ . '/../timezone.php';
+
+// Session-based authentication (same as sys_infos.php)
+session_start();
+if (!isset($_SESSION['rpidbauth'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Authentication required']);
+    exit;
+}
 
 // Load config
 $config = new Config();
 $config->load(__DIR__ . '/../local.config', __DIR__ . '/../defaults.php');
-
-// Check authentication
-$authEnabled = $config->get('general.pass') !== 'd41d8cd98f00b204e9800998ecf8427e';
-if ($authEnabled) {
-    if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])) {
-        header('WWW-Authenticate: Basic realm="RaspberryDashboard"');
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => 'Authentication required']);
-        exit;
-    }
-    
-    $validUser = $config->get('general.user') ?: 'admin';
-    $validPass = $config->get('general.pass');
-    
-    if ($_SERVER['PHP_AUTH_USER'] !== $validUser || md5($_SERVER['PHP_AUTH_PW']) !== $validPass) {
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => 'Invalid credentials']);
-        exit;
-    }
-}
 
 // Get action
 $action = $_GET['action'] ?? $_POST['action'] ?? 'status';

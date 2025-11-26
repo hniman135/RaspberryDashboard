@@ -12,8 +12,7 @@ require "backend/Config.php";
 $config = new Config;
 $config->load("local.config", "defaults.php");
 
-// Skip session auth if HTTP Basic Auth is already used
-$auth = true; // Always authenticated (use HTTP Basic Auth at web server level)
+$auth=(isset($_SESSION["rpidbauth"])) ? true : false;
 
 if(!isset($_SESSION["setup"])){
   if( ($config->get("general.initialsetup")=="0") || ($config->get("general.initialsetup")=="") ){
