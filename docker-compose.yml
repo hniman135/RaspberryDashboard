@@ -45,6 +45,10 @@ services:
       - MQTT_PORT=1883
       - MQTT_USER=iot_user
       - MQTT_PASSWORD=iot_password
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
